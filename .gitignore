@@ -1,6 +1,5 @@
 ### Project ###
 log/
-weibo/
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,jetbrains,visualstudiocode,windows,macos,linux
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,jetbrains,visualstudiocode,windows,macos,linux
@@ -380,5 +379,4 @@ $RECYCLE.BIN/
 
 js.json
 user_id_list.txt
-/weibo
 
