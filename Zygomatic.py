@@ -199,7 +199,7 @@ def AnalyseID(user_id, keywords):
     out_pages = []
     if not os.path.exists(crawled_users):
         return out_ids, out_pages
-    with open(crawled_users, "r") as file:
+    with open(crawled_users, "r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         user_list_data = list(reader)
     # 逐行读取内容
@@ -214,7 +214,7 @@ def AnalyseID(user_id, keywords):
     if not os.path.exists(target_json_path):
         return out_ids, out_pages
 
-    with open(target_json_path, "r") as file:
+    with open(target_json_path, "r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         user_data = list(reader)
     for row in user_data:
@@ -232,10 +232,33 @@ def AnalyseID(user_id, keywords):
     print("Analyse End for User:" + target_row["昵称"])
     return out_ids, out_pages
 
-def crawle_and_analyse():
+def load_or_init():
     ran_users = []
-    new_users = [init_userid]
+    new_users = []
     graph_datas = []
+    if os.path.exists(output_userid_path):
+        with open(output_userid_path, 'r') as file:
+            lines = file.readlines()
+        for li in lines:
+            ran_users.append(li.strip())
+
+    if os.path.exists(output_nosearched_users):
+        with open(output_nosearched_users, 'r') as file:
+            lines = file.readlines()
+        for li in lines:
+            new_users.append(li.strip())
+    else:
+        new_users.append(init_userid)
+
+    if os.path.exists(output_graph_path):
+        with open(output_graph_path, 'r') as file:
+            lines = file.readlines()
+        for li in lines:
+            graph_datas.append(li.replace("\n",""))
+    return ran_users, new_users, graph_datas
+
+def crawle_and_analyse():
+    ran_users, new_users, graph_datas = load_or_init()
 
     while len(new_users) > 0:
         user_id = new_users.pop(0)
@@ -258,5 +281,5 @@ def crawle_and_analyse():
         write_array_to_txt(output_nosearched_users, new_users)
         write_array_to_txt_incremental(output_graph_path, graph_datas)
     print("Done!!")
-
+    
 crawle_and_analyse()
