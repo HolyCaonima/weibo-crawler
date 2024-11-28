@@ -20,7 +20,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 #from simcse import SimCSE
 import numpy as np
 import weibo_follow
-
+import progressbar
+import time
 
 # 加载 BERT 模型和分词器
 #tokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
@@ -35,11 +36,12 @@ output_userid_path = "./weibo/searchedUsers.txt"
 output_nosearched_users = "./weibo/noSearchedUsers.txt"
 output_graph_path = "./weibo/searchedGraph.txt"
 init_userid = "5576424769"
+avoid_bigv = True
 #init_userid = "7808280970"
-crawle_key_words = ["颧骨","颧骨内推","下垂","垂","pz","zzy","gj","郭军","颧弓","ljq","李金清"]
+crawle_key_words = ["颧骨","颧骨内推","下垂","垂","pz","zzy","gj","郭军","颧弓","ljq","李金清","轮廓整形","颧骨手术"]
 
 relevant_threshold = 0.7
-follower_tracking_threshold = 4
+follower_tracking_threshold = 2
 
 def write_array_to_txt_incremental(file_name, array):
     """
@@ -167,22 +169,26 @@ def vector_encode(text):
         embeddings = model(**tokens).last_hidden_state.mean(dim=1)
     return embeddings
 
-def SetupConfig(user_id):
+def SetupConfig(user_id, need_cookie):
     with open(cfg_file_path, encoding="utf-8") as f:
         crawle_cfg = json.loads(f.read())
     crawle_cfg["user_id_list"] = [user_id]
+    if need_cookie :
+        crawle_cfg["cookie"] = crawle_cfg["cookie_temp"]
+    else:
+        crawle_cfg["cookie"] = "your cookie"
     with open(cfg_file_path, "w") as file:
         json.dump(crawle_cfg, file, indent=4)
 
 def RunCrawler(user_id):
     print("Set User To Crawle :" + user_id)
-    SetupConfig(user_id)
+    SetupConfig(user_id, False)
     print("Run Crawler")
     weibo.main()
     print("Crawle End for :" + user_id)
 
 def SearchFollower(user_id):
-    SetupConfig(user_id)
+    SetupConfig(user_id, True)
     got_follower = weibo_follow.main()
     ret_arr = []
     try:
@@ -197,8 +203,9 @@ def SearchFollower(user_id):
 def AnalyseID(user_id, keywords):
     out_ids = []
     out_pages = []
+    track_followers = True
     if not os.path.exists(crawled_users):
-        return out_ids, out_pages
+        return out_ids, out_pages, track_followers
     with open(crawled_users, "r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         user_list_data = list(reader)
@@ -208,29 +215,41 @@ def AnalyseID(user_id, keywords):
         if row["\ufeff用户id"] == user_id:
             target_row = row
     if target_row == "":
-        return out_ids, out_pages
+        return out_ids, out_pages, track_followers
     print("Analyse User:" + target_row["昵称"])
-    target_json_path = "./weibo/" + target_row["昵称"] + "/" + user_id + ".csv"
+    target_csv_path = "./weibo/" + target_row["昵称"] + "/" + user_id + ".csv"
+    target_json_path = "./weibo/" + target_row["昵称"] + "/" + user_id + ".json"
+    if not os.path.exists(target_csv_path):
+        return out_ids, out_pages, track_followers
     if not os.path.exists(target_json_path):
-        return out_ids, out_pages
+        return out_ids, out_pages, track_followers
 
-    with open(target_json_path, "r", encoding="utf-8") as file:
+    with open(target_csv_path, "r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         user_data = list(reader)
-    for row in user_data:
-        main_text = row["源微博正文"]
-        if isinstance(main_text, str):
-            results, total_score = match_sentences_with_keywords(main_text, keywords)
-            if total_score > relevant_threshold :
-                out_pages.append(row)
-                for candidate, score in results:
-                    print(f"- {candidate}: 最大相似度 {score:.4f}")
-                print(main_text + "\n\n")
-                if row["是否原创"] == "False":
-                    if row["源用户id"] not in out_ids:
-                        out_ids.append(row["源用户id"])
+
+    with open(target_json_path, encoding="utf-8") as f:
+        user_cfg = json.loads(f.read())
+
+    if avoid_bigv:
+        track_followers = not user_cfg['user']["verified"]
+    if track_followers:
+        for row in user_data:
+            main_text = str(row["源微博正文"]) + "。" + str(row["正文"])
+            if main_text != "":
+                results, total_score = match_sentences_with_keywords(main_text, keywords)
+                if total_score > relevant_threshold :
+                    out_pages.append(row)
+                    for candidate, score in results:
+                        print(f"- {candidate}: 最大相似度 {score:.4f}")
+                    print(main_text + "\n\n")
+                    if row["是否原创"] == "False":
+                        if row["源用户id"] not in out_ids:
+                            out_ids.append(row["源用户id"])
+    else:
+        print("Jumpover BigV")
     print("Analyse End for User:" + target_row["昵称"])
-    return out_ids, out_pages
+    return out_ids, out_pages, track_followers
 
 def load_or_init():
     ran_users = []
@@ -259,14 +278,15 @@ def load_or_init():
 
 def crawle_and_analyse():
     ran_users, new_users, graph_datas = load_or_init()
-
+    bar = progressbar.ProgressBar(max_value=100)
     while len(new_users) > 0:
         user_id = new_users.pop(0)
+        bar.update((1.0 - (len(new_users)/(len(new_users) + len(ran_users))))*100)
         if user_id.isdigit():
             if user_id not in ran_users:
                 graph_datas.append("node:" + user_id)
                 RunCrawler(user_id)
-                analyse_ids, analyse_pages = AnalyseID(user_id, crawle_key_words)
+                analyse_ids, analyse_pages, analyse_track_follower = AnalyseID(user_id, crawle_key_words)
                 new_users.extend(analyse_ids)
                 for it in analyse_ids:
                     graph_datas.append("redirect:" + user_id + " " + it)
@@ -274,12 +294,13 @@ def crawle_and_analyse():
                 write_dict_to_csv_incremental(output_searchedPages_path, analyse_pages)
                 write_array_to_txt_incremental(output_userid_path, ran_users)
                 if len(analyse_pages) > follower_tracking_threshold :
-                    get_follower = SearchFollower(user_id)
-                    new_users.extend(get_follower)
-                    for it in get_follower :
-                        graph_datas.append("follower:" + it + " " + user_id)
+                    if analyse_track_follower:
+                        get_follower = SearchFollower(user_id)
+                        new_users.extend(get_follower)
+                        for it in get_follower :
+                            graph_datas.append("follower:" + it + " " + user_id)
         write_array_to_txt(output_nosearched_users, new_users)
         write_array_to_txt_incremental(output_graph_path, graph_datas)
     print("Done!!")
-    
+
 crawle_and_analyse()

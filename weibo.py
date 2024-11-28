@@ -63,6 +63,7 @@ class Weibo(object):
         else:
             logger.error("since_date 格式不正确，请确认配置是否正确")
             sys.exit()
+        self.max_page_count = config["max_page_count"]
         self.since_date = since_date  # 起始时间，即爬取发布日期从该值到现在的微博，形式为yyyy-mm-ddThh:mm:ss，如：2023-08-21T09:23:03
         self.start_page = config.get("start_page", 1)  # 开始爬的页，如果中途被限制而结束可以用此定义开始页码
         self.write_mode = config[
@@ -2137,6 +2138,7 @@ class Weibo(object):
             today = datetime.today()
             if since_date <= today:    # since_date 若为未来则无需执行
                 page_count = self.get_page_count()
+                page_count = min(self.max_page_count, page_count)
                 wrote_count = 0
                 page1 = 0
                 random_pages = random.randint(1, 5)
