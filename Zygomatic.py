@@ -88,8 +88,8 @@ def write_page_incremental(file_name, data):
                 reader = csv.DictReader(file)
                 page_list_data = list(reader)
             for row in page_list_data:
-                if row["id"].strip() not in existing_page_list:
-                    existing_page_list.append(row["id"].strip())
+                if row["bid"].strip() not in existing_page_list:
+                    existing_page_list.append(row["bid"].strip())
     else:
         with open(dict_page_path, 'r') as file:
             lines = file.readlines()
@@ -97,11 +97,11 @@ def write_page_incremental(file_name, data):
             existing_page_list.append(li.strip())
     valid_pages = []
     for row in data:
-        if row["id"].strip() not in existing_page_list:
+        if row["bid"].strip() not in existing_page_list:
             valid_pages.append(row)
-            existing_page_list.append(row["id"].strip())
+            existing_page_list.append(row["bid"].strip())
     write_array_to_txt(dict_page_path, existing_page_list)
-    write_dict_to_csv_incremental(valid_pages)
+    write_dict_to_csv_incremental(file_name, valid_pages)
 
 def write_dict_to_csv_incremental(file_name, data):
     """
@@ -317,7 +317,7 @@ def crawle_and_analyse():
                 for it in analyse_ids:
                     graph_datas.append("redirect:" + user_id + " " + it)
                 ran_users.append(user_id)
-                write_dict_to_csv_incremental(output_searchedPages_path, analyse_pages)
+                write_page_incremental(output_searchedPages_path, analyse_pages)
                 write_array_to_txt_incremental(output_userid_path, ran_users)
                 if len(analyse_pages) > follower_tracking_threshold :
                     if analyse_track_follower:
