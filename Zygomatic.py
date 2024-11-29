@@ -2,7 +2,7 @@
 Author: letianyu letianyu@tencent.com
 Date: 2024-11-28 13:30:12
 LastEditors: letianyu letianyu@tencent.com
-LastEditTime: 2024-11-28 17:33:48
+LastEditTime: 2024-11-29 19:27:43
 FilePath: \weibo-crawler\Zygomatic.py
 Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
 '''
@@ -38,7 +38,7 @@ output_graph_path = "./weibo/searchedGraph.txt"
 init_userid = "5576424769"
 avoid_bigv = True
 #init_userid = "7808280970"
-crawle_key_words = ["颧骨","颧骨内推","下垂","垂","pz","zzy","gj","郭军","颧弓","ljq","李金清","轮廓整形","颧骨手术"]
+crawle_key_words = ["颧骨","颧骨内推","下垂","垂","pz","zzy","gj","郭军","颧弓","ljq","李金清","轮廓整形","颧骨手术","郑康在"]
 
 relevant_threshold = 0.7
 follower_tracking_threshold = 2
@@ -78,6 +78,30 @@ def write_array_to_txt(file_name, array):
     with open(file_name, mode="w", encoding="utf-8") as file:
         for item in array:
             file.write(f"{item}\n")
+
+def write_page_incremental(file_name, data):
+    dict_page_path = file_name.replace(".csv", ".txt")
+    existing_page_list = []
+    if not os.path.exists(dict_page_path):
+        if os.path.exists(file_name):
+            with open(file_name, "r", encoding="utf-8") as file:
+                reader = csv.DictReader(file)
+                page_list_data = list(reader)
+            for row in page_list_data:
+                if row["id"].strip() not in existing_page_list:
+                    existing_page_list.append(row["id"].strip())
+    else:
+        with open(dict_page_path, 'r') as file:
+            lines = file.readlines()
+        for li in lines:
+            existing_page_list.append(li.strip())
+    valid_pages = []
+    for row in data:
+        if row["id"].strip() not in existing_page_list:
+            valid_pages.append(row)
+            existing_page_list.append(row["id"].strip())
+    write_array_to_txt(dict_page_path, existing_page_list)
+    write_dict_to_csv_incremental(valid_pages)
 
 def write_dict_to_csv_incremental(file_name, data):
     """
@@ -239,7 +263,9 @@ def AnalyseID(user_id, keywords):
             if main_text != "":
                 results, total_score = match_sentences_with_keywords(main_text, keywords)
                 if total_score > relevant_threshold :
-                    out_pages.append(row)
+                    row_to_writeout = row
+                    row_to_writeout["uid"] = user_id
+                    out_pages.append(row_to_writeout)
                     for candidate, score in results:
                         print(f"- {candidate}: 最大相似度 {score:.4f}")
                     print(main_text + "\n\n")
